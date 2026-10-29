@@ -1,0 +1,8 @@
+name: guestbook-monitoring
+runtime: nodejs
+description: Kubernetes Guestbook with Prometheus and Grafana monitoring
+template:
+  config:
+    isMinikube:
+      description: Whether you are deploying to minikube
+      default: true

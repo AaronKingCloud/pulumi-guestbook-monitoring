@@ -1,0 +1,4 @@
+node_modules/
+bin/
+_upstream/
+Pulumi.*.yaml
