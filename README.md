@@ -4,6 +4,8 @@ This project extends the [Pulumi Kubernetes Guestbook example](https://github.co
 
 Everything is deployed by a single `pulumi up`. Nothing in Grafana or Prometheus is configured by hand.
 
+![Guestbook Grafana dashboard](docs/dashboard.png)
+
 ## Architecture
 
 ```
@@ -113,11 +115,16 @@ The frontend is a ClusterIP service on kind. Forward it to localhost:
 kubectl port-forward svc/frontend 8080:80
 ```
 
-Then open http://localhost:8080 and add a few messages. To generate steady traffic for the dashboard, run this in a second terminal:
+Then open http://localhost:8080 and add a few messages.
+
+To generate steady traffic for the dashboard, run a client inside the cluster for 5 minutes:
 
 ```bash
-for i in $(seq 1 200); do curl -s "http://localhost:8080/guestbook.php?cmd=get&key=messages" > /dev/null; sleep 0.2; done
+kubectl run traffic-gen --image=curlimages/curl:8.11.1 --restart=Never --rm -it --command -- \
+  sh -c 'end=$(($(date +%s)+300)); while [ $(date +%s) -lt $end ]; do curl -s -o /dev/null "http://frontend/guestbook.php?cmd=get&key=messages"; sleep 0.1; done'
 ```
+
+This goes through the `frontend` Service, so requests are spread across all three frontend pods. Traffic sent through `kubectl port-forward` is not load balanced: it all reaches a single pod.
 
 ## Verify that Prometheus is scraping the Guestbook
 
@@ -171,6 +178,8 @@ The **Guestbook** dashboard refreshes every 10 seconds and has four rows:
 | Backend | Redis commands/sec and connected clients, leader vs. replica |
 | Resources | CPU and memory usage for each Guestbook pod |
 
+The screenshot above shows two kinds of test traffic. Until about 20:53, requests came through `kubectl port-forward`, which connects to one pod, so only one frontend pod (blue) handled them. From 20:55, requests came from a client inside the cluster through the `frontend` Service, and the load is spread evenly across all three pods. The per-pod CPU panel and Redis commands/sec follow the same pattern.
+
 ## Design decisions
 
 - **Sidecar exporters.** Neither the Guestbook PHP app nor Redis publishes Prometheus metrics. Running an exporter in the same pod lets it reach the app on `localhost`. It also scales with the app: each new frontend replica brings its own exporter, so Prometheus sees every pod individually.
@@ -204,6 +213,7 @@ kind delete cluster --name guestbook
 ├── monitoring.ts             # Prometheus + Grafana (kube-prometheus-stack)
 ├── dashboard.ts              # Grafana dashboard as a ConfigMap
 ├── cluster/kind-config.yaml  # Local cluster definition
+├── docs/dashboard.png        # Dashboard screenshot
 ├── Pulumi.yaml
 ├── package.json
 └── tsconfig.json
